@@ -1,23 +1,27 @@
+"""
+Main application entry point for Hmoom - a reflection journaling platform.
+"""
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from routes import user, view, reflection  # Your existing route imports
 import uvicorn
 
+from routes import user, view, reflection
+
+# Initialize FastAPI application
 app = FastAPI(
     title="Hmoom",
-    description="realse your thoughts",
-    version="1.0.0"
+    description="Release your thoughts - A personal reflection journaling platform",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
-# Mount static files directory
+# Mount static files directory for serving CSS, JS, and images
 app.mount("/static", StaticFiles(directory="View/static"), name="static")
 
-# Include your existing routers
+# Include API routers
 app.include_router(user.router)
 app.include_router(view.router)
 app.include_router(reflection.router)
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
 
 

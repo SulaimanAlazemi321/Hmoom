@@ -1,117 +1,108 @@
-from models import User, EmailVerificationOTP, PasswordResetToken  # Add EmailVerificationOTP
-from database import localSession
-from fastapi import  Depends, HTTPException, status, APIRouter, Request
-from typing import Annotated, Optional
-from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field, field_validator
-from passlib.context import CryptContext
+"""
+User authentication and management routes.
+
+This module handles user registration, login, OAuth, password reset,
+email verification, and user management operations.
+"""
+import logging
+import secrets
+import string
+import re
+from datetime import datetime, timedelta, timezone
+from typing import Annotated, Optional, Dict, Any
+
+from fastapi import Depends, HTTPException, status, APIRouter, Request, Cookie, Response
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy.orm import Session
+from passlib.context import CryptContext
 from jose import jwt, JWTError
 from jose.exceptions import ExpiredSignatureError
-from datetime import datetime, timedelta, timezone
-from fastapi import Cookie, Response
-from fastapi.responses import JSONResponse, RedirectResponse
-from .config import settings   
 import httpx
-import secrets
-import base64
-from io import BytesIO
-from fastapi.responses import Response as FastAPIResponse
-import re
-import requests  # Add this for reCAPTCHA verification
-from typing import List, Dict
-from .email_service import email_service  # Add this import
-import smtplib
-import string
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import logging
+import requests
 
+from models import User, EmailVerificationOTP, PasswordResetToken, Reflection
+from database import localSession
+from .config import settings
+from .email_service import email_service
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Router configuration
 router = APIRouter(
     tags=["User"],
     prefix="/user"
 )
 
+# Security configuration
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/token")
 
+# JWT configuration
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
-ACCESS_TOKEN_EXPIRE_MINUTES = 3000
+ACCESS_TOKEN_EXPIRE_MINUTES = 30 * 24 * 60  # 30 days
 
 # Google OAuth settings
 GOOGLE_CLIENT_ID = settings.GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET = settings.GOOGLE_CLIENT_SECRET
 GOOGLE_REDIRECT_URI = settings.GOOGLE_REDIRECT_URI
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/token")
+
+# ========== Database Dependency ==========
 
 def get_db():
+    """Provide database session for dependency injection."""
     db = localSession()
     try:
         yield db
     finally:
         db.close()
 
-dbDepends = Annotated[Session, Depends(get_db)] 
 
-# ---------Pydantic classes ------------- 
+DbSession = Annotated[Session, Depends(get_db)]
 
-class User_ID_Schema(BaseModel):
-    id: int = Field(gt=0)
-    model_config={"json_schema_extra": {
-        "example": {
-            "id": "TheID"
+
+# ========== Pydantic Schemas ==========
+
+class UserIdSchema(BaseModel):
+    """Schema for user ID operations."""
+    id: int = Field(gt=0, description="User ID")
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {"id": 1}
         }
-    }}
+    }
+
 
 class Token(BaseModel):
-    access_token: str 
-    token_type: str 
+    """JWT token response schema."""
+    access_token: str
+    token_type: str
 
-class User_User_Schema(BaseModel):
-    username: str = Field(min_length=2)
-    password: str = Field(min_length=2)
-    role: str = Field(min_length=2)
-    model_config={"json_schema_extra": {
-        "example": {
-            "username": "TheUsername",
-            "password": "ThePassword",
-            "role": "TheRole",
-        }
-    }}
 
-# Add this Pydantic schema after the existing schemas
-class SignupSchema(BaseModel):
+class CreateUserSchema(BaseModel):
+    """Schema for creating a new user (admin use)."""
     username: str = Field(min_length=3, max_length=50)
-    email: str = Field(min_length=5, max_length=100)
-    password: str = Field(min_length=8, max_length=128)  # Updated minimum length
-    recaptcha_response: str
+    password: str = Field(min_length=8, max_length=128)
+    role: str = Field(default="user", pattern="^(user|admin)$")
     
-    # Add custom validator for password complexity
-    @field_validator('password')
-    @classmethod
-    def validate_password_complexity(cls, v):
-        validation_result = validate_password_complexity(v)
-        if not validation_result["is_valid"]:
-            # Join all errors into a single message
-            error_message = "Password requirements not met: " + "; ".join(validation_result["errors"])
-            raise ValueError(error_message)
-        return v
-
     model_config = {
         "json_schema_extra": {
             "example": {
-                "username": "newuser",
-                "email": "user@example.com", 
-                "password": "SecurePass123!",  # Updated example
-                "recaptcha_response": "captcha_response_here"
+                "username": "johndoe",
+                "password": "SecurePass123!",
+                "role": "user"
             }
         }
     }
 
-# Add new schemas for OTP verification
-class SignupRequestSchema(BaseModel):
-    """Schema for initial signup request (sends OTP)"""
+class SignupSchema(BaseModel):
+    """Schema for user signup (deprecated - use SignupRequestSchema)."""
     username: str = Field(min_length=3, max_length=50)
     email: str = Field(min_length=5, max_length=100)
     password: str = Field(min_length=8, max_length=128)
@@ -126,18 +117,76 @@ class SignupRequestSchema(BaseModel):
             raise ValueError(error_message)
         return v
 
-class OTPVerificationSchema(BaseModel):
-    """Schema for OTP verification (completes signup)"""
-    email: str
-    otp_code: str = Field(min_length=6, max_length=6)
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "username": "newuser",
+                "email": "user@example.com", 
+                "password": "SecurePass123!",
+                "recaptcha_response": "test_recaptcha_token"
+            }
+        }
+    }
 
-# Add OTP utility functions
+class SignupRequestSchema(BaseModel):
+    """Schema for initial signup request - sends OTP email."""
+    username: str = Field(min_length=3, max_length=50)
+    email: str = Field(min_length=5, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
+    recaptcha_response: str
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password_complexity(cls, v):
+        validation_result = validate_password_complexity(v)
+        if not validation_result["is_valid"]:
+            error_message = "Password requirements not met: " + "; ".join(validation_result["errors"])
+            raise ValueError(error_message)
+        return v
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "username": "newuser",
+                "email": "user@example.com",
+                "password": "SecurePass123!",
+                "recaptcha_response": "test_recaptcha_token"
+            }
+        }
+    }
+
+
+class OTPVerificationSchema(BaseModel):
+    """Schema for OTP verification to complete signup."""
+    email: str = Field(min_length=5, max_length=100)
+    otp_code: str = Field(min_length=6, max_length=6, pattern="^[0-9]{6}$")
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "email": "user@example.com",
+                "otp_code": "123456"
+            }
+        }
+    }
+
+# ========== Utility Functions ==========
+
 def generate_otp() -> str:
-    """Generate a 6-digit OTP"""
+    """Generate a 6-digit OTP code."""
     return email_service.generate_otp()
 
-def cleanup_expired_otps(db: Session):
-    """Remove expired OTP records"""
+
+def cleanup_expired_otps(db: Session) -> int:
+    """
+    Remove expired OTP records from database.
+    
+    Args:
+        db: Database session.
+        
+    Returns:
+        Number of expired records removed.
+    """
     try:
         expired_otps = db.query(EmailVerificationOTP).filter(
             EmailVerificationOTP.expires_at < datetime.now()
@@ -149,16 +198,28 @@ def cleanup_expired_otps(db: Session):
         db.commit()
         return len(expired_otps)
     except Exception as e:
+        logger.error(f"Failed to cleanup expired OTPs: {e}")
         db.rollback()
         return 0
 
-# Add new schemas for password reset
 class ForgotPasswordSchema(BaseModel):
+    """Schema for password reset request."""
     email: str = Field(min_length=5, max_length=100)
     recaptcha_response: str
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "email": "user@example.com",
+                "recaptcha_response": "test_recaptcha_token"
+            }
+        }
+    }
+
 
 class ResetPasswordSchema(BaseModel):
-    token: str
+    """Schema for resetting password with token."""
+    token: str = Field(min_length=1, description="Password reset token")
     new_password: str = Field(min_length=8, max_length=128)
     confirm_password: str = Field(min_length=8, max_length=128)
     
@@ -177,10 +238,27 @@ class ResetPasswordSchema(BaseModel):
         if 'new_password' in info.data and v != info.data['new_password']:
             raise ValueError('Passwords do not match')
         return v
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "token": "reset_token_here",
+                "new_password": "NewSecurePass123!",
+                "confirm_password": "NewSecurePass123!"
+            }
+        }
+    }
 
-# Utility functions for password reset
-def cleanup_expired_reset_tokens(db: Session):
-    """Remove expired password reset tokens"""
+def cleanup_expired_reset_tokens(db: Session) -> int:
+    """
+    Remove expired password reset tokens from database.
+    
+    Args:
+        db: Database session.
+        
+    Returns:
+        Number of expired tokens removed.
+    """
     try:
         expired_tokens = db.query(PasswordResetToken).filter(
             PasswordResetToken.expires_at < datetime.now()
@@ -192,18 +270,32 @@ def cleanup_expired_reset_tokens(db: Session):
         db.commit()
         return len(expired_tokens)
     except Exception as e:
+        logger.error(f"Failed to cleanup expired reset tokens: {e}")
         db.rollback()
         return 0
 
+
 def generate_reset_token() -> str:
-    """Generate a secure password reset token"""
+    """Generate a secure password reset token."""
     return email_service.generate_reset_token()
 
-# ---------Avatar Route ------------- 
+# ========== Avatar Routes ==========
 
 @router.get("/avatar/{user_id}")
-async def get_user_avatar(user_id: int, db: dbDepends):
-    """Serve user avatar with caching"""
+async def get_user_avatar(user_id: int, db: DbSession):
+    """
+    Serve user avatar image with caching support.
+    
+    Args:
+        user_id: ID of the user whose avatar to fetch.
+        db: Database session.
+        
+    Returns:
+        Avatar image response with caching headers.
+        
+    Raises:
+        HTTPException: If avatar not found or cannot be fetched.
+    """
     user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.avatar_url:
         raise HTTPException(status_code=404, detail="Avatar not found")
@@ -213,6 +305,7 @@ async def get_user_avatar(user_id: int, db: dbDepends):
         async with httpx.AsyncClient() as client:
             response = await client.get(user.avatar_url, timeout=10.0)
             if response.status_code == 200:
+                from fastapi.responses import Response as FastAPIResponse
                 return FastAPIResponse(
                     content=response.content,
                     media_type="image/jpeg",
@@ -222,17 +315,27 @@ async def get_user_avatar(user_id: int, db: dbDepends):
                     }
                 )
     except Exception as e:
-        print(f"Error fetching avatar: {e}")
+        logger.error(f"Error fetching avatar: {e}")
     
     # If we can't get the avatar, return 404
     raise HTTPException(status_code=404, detail="Avatar not available")
 
-# ---------Google OAuth Routes ------------- 
+# ========== Google OAuth Routes ==========
 
 @router.get("/google/login")
 async def google_login(response: Response):
-    """Redirect to Google OAuth"""
-    state = secrets.token_urlsafe(32)  # Generate random state for security
+    """
+    Initiate Google OAuth login flow.
+    
+    Redirects user to Google's OAuth consent screen and sets
+    a state cookie for CSRF protection.
+    
+    Returns:
+        RedirectResponse to Google OAuth URL.
+    """
+    # Generate random state for CSRF protection
+    state = secrets.token_urlsafe(32)
+    
     google_auth_url = (
         f"https://accounts.google.com/o/oauth2/auth?"
         f"client_id={GOOGLE_CLIENT_ID}&"
@@ -248,7 +351,7 @@ async def google_login(response: Response):
         key="oauth_state", 
         value=state, 
         httponly=True, 
-        secure=False,  # Set to True in production with HTTPS
+        secure=False,  # TODO: Set to True in production with HTTPS
         samesite="lax",
         max_age=600  # 10 minutes
     )
@@ -257,7 +360,7 @@ async def google_login(response: Response):
 @router.get("/google/callback")
 async def google_callback(
     request: Request,
-    db: dbDepends,
+    db: DbSession,
     response: Response,
     code: str = None,
     state: str = None,
@@ -504,33 +607,61 @@ def get_password_strength(password: str) -> Dict[str, any]:
         "percentage": (score / 5) * 100
     }
 
-# ---------Regular Authentication Routes ------------- 
+# ========== Authentication Routes ==========
 
 @router.post("/token")
-async def login_for_access(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: dbDepends, response: Response):
-    # Note: OAuth2PasswordRequestForm doesn't include custom fields, so we'll handle this differently
+async def login_for_access(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    db: DbSession,
+    response: Response
+):
+    """
+    OAuth2 compatible token login endpoint.
+    
+    Used for Swagger UI authentication and API token generation.
+    """
     user = db.query(User).filter(User.username == form_data.username).first()
     
     if not user or not user.hashed_password or not pwd_context.verify(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate user")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate user"
+        )
 
-    token = create_access_token(user.username, user.id, user.role, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    token = create_access_token(
+        user.username,
+        user.id,
+        user.role,
+        timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,  
-        secure=False,  
+        secure=False,  # TODO: Set to True in production
         samesite="lax", 
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
     
     return {"message": "Login successful", "token_type": "bearer"}
 
-# Add a new endpoint for login with reCAPTCHA
+
 class LoginSchema(BaseModel):
-    login_identifier: str = Field(min_length=3, max_length=100)  # Can be username or email
-    password: str
+    """Schema for user login with reCAPTCHA."""
+    login_identifier: str = Field(min_length=3, max_length=100, description="Username or email")
+    password: str = Field(min_length=1)
     recaptcha_response: str
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "login_identifier": "user@example.com",
+                "password": "SecurePass123!",
+                "recaptcha_response": "test_recaptcha_token"
+            }
+        }
+    }
 
 # Add utility function to identify if input is email or username
 def is_email(identifier: str) -> bool:
@@ -539,7 +670,7 @@ def is_email(identifier: str) -> bool:
     return re.match(email_pattern, identifier) is not None
 
 @router.post("/login")
-async def login_with_captcha(login_data: LoginSchema, db: dbDepends, response: Response):
+async def login_with_captcha(login_data: LoginSchema, db: DbSession, response: Response):
     """Login with username or email and reCAPTCHA verification"""
     
     # Verify reCAPTCHA
@@ -640,18 +771,35 @@ async def logout(response: Response):
     response.delete_cookie(key="access_token")
     return {"message": "Logged out successfully"}
 
-# ---------User Management Routes ------------- 
+# ========== User Management Routes ==========
 
-@router.get("/get-users",  status_code=status.HTTP_200_OK)
-async def get_user(db: dbDepends):
+@router.get("/get-users", status_code=status.HTTP_200_OK)
+async def get_all_users(db: DbSession):
+    """
+    Get all users in the system.
+    
+    Returns:
+        List of all users.
+    """
     return db.query(User).all()
 
 @router.post("/add-user", status_code=status.HTTP_201_CREATED)
-async def add_user(db: dbDepends, user_param: User_User_Schema):
-    """Create a new user with username/password"""
+async def add_user(user_data: CreateUserSchema, db: DbSession):
+    """
+    Create a new user with username/password (admin use).
     
+    Args:
+        user_data: User creation data.
+        db: Database session.
+        
+    Returns:
+        Success message with new user ID.
+        
+    Raises:
+        HTTPException: If username already exists or creation fails.
+    """
     # Check if username already exists
-    existing_user = db.query(User).filter(User.username == user_param.username).first()
+    existing_user = db.query(User).filter(User.username == user_data.username).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
@@ -659,15 +807,30 @@ async def add_user(db: dbDepends, user_param: User_User_Schema):
         )
     
     try:
-        new_user = create_regular_user(db, user_param.username, user_param.password, user_param.role)
-        return {"message": f"User {new_user.username} created successfully", "user_id": new_user.id}
+        new_user = create_regular_user(db, user_data.username, user_data.password, user_data.role)
+        return {
+            "message": f"User {new_user.username} created successfully",
+            "user_id": new_user.id
+        }
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        logger.error(f"Failed to create user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create user"
+        )
+
+
+# ========== Email Verification Routes ==========
 
 @router.post("/signup/request-verification", status_code=status.HTTP_200_OK)
-async def request_email_verification(signup_data: SignupRequestSchema, db: dbDepends):
-    """Step 1: Request email verification - sends OTP to email"""
+async def request_email_verification(signup_data: SignupRequestSchema, db: DbSession):
+    """
+    Step 1: Request email verification - sends OTP to email.
+    
+    Initiates the signup process by sending a verification OTP to the provided email.
+    User data is temporarily stored until verification is complete.
+    """
     
     # Cleanup expired OTPs first
     cleanup_expired_otps(db)
@@ -763,7 +926,7 @@ async def request_email_verification(signup_data: SignupRequestSchema, db: dbDep
         )
 
 @router.post("/signup/verify-email", status_code=status.HTTP_201_CREATED)
-async def verify_email_and_create_account(verification_data: OTPVerificationSchema, db: dbDepends):
+async def verify_email_and_create_account(verification_data: OTPVerificationSchema, db: DbSession):
     """Step 2: Verify OTP and create user account"""
     
     try:
@@ -849,7 +1012,7 @@ async def verify_email_and_create_account(verification_data: OTPVerificationSche
         )
 
 @router.post("/signup/resend-otp", status_code=status.HTTP_200_OK)
-async def resend_verification_otp(email_data: dict, db: dbDepends):
+async def resend_verification_otp(email_data: dict, db: DbSession):
     """Resend OTP for email verification"""
     email = email_data.get("email")
     
@@ -911,108 +1074,56 @@ async def resend_verification_otp(email_data: dict, db: dbDepends):
             detail="Failed to resend verification code"
         )
 
-# Keep your existing signup endpoint as backup, but rename it
-@router.post("/signup-legacy", status_code=status.HTTP_201_CREATED)
-async def signup_user_legacy(signup_data: SignupSchema, db: dbDepends):
-    """Legacy signup without email verification (for testing)"""
+
+
+@router.delete("/delete-user-by-id", status_code=status.HTTP_200_OK)
+async def delete_user_by_id(user_id_data: UserIdSchema, db: DbSession):
+    """
+    Delete a user and all associated data.
     
-    # Validate email format
-    if not validate_email(signup_data.email):
+    Args:
+        user_id_data: Schema containing user ID to delete.
+        db: Database session.
+        
+    Returns:
+        Success message.
+        
+    Raises:
+        HTTPException: If user not found or deletion fails.
+    """
+    # Find the user
+    user_to_delete = db.query(User).filter(User.id == user_id_data.id).first()
+    if not user_to_delete:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid email format"
-        )
-    
-    # Validate password complexity (this is also done by Pydantic, but double-check)
-    password_validation = validate_password_complexity(signup_data.password)
-    if not password_validation["is_valid"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password requirements not met: " + "; ".join(password_validation["errors"])
-        )
-    
-    # Verify reCAPTCHA
-    if not verify_recaptcha(signup_data.recaptcha_response):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="reCAPTCHA verification failed"
-        )
-    
-    # Check if username already exists
-    existing_user = db.query(User).filter(User.username == signup_data.username).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already exists"
-        )
-    
-    # Check if email already exists
-    existing_email = db.query(User).filter(User.email == signup_data.email).first()
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
         )
     
     try:
-        # Create new user
-        new_user = User(
-            username=signup_data.username,
-            email=signup_data.email,
-            hashed_password=pwd_context.hash(signup_data.password),
-            role="user",
-            google_id=None,
-            full_name=None,
-            avatar_url=None
-        )
+        # Delete all reflections belonging to this user
+        # (cascade delete should handle this automatically with proper relationship config)
+        user_reflections = db.query(Reflection).filter(
+            Reflection.user_id == user_id_data.id
+        ).all()
         
-        db.add(new_user)
+        for reflection in user_reflections:
+            db.delete(reflection)
+        
+        # Delete the user
+        db.delete(user_to_delete)
         db.commit()
-        db.refresh(new_user)
         
         return {
-            "message": "Account created successfully",
-            "username": new_user.username,
-            "user_id": new_user.id
+            "success": f"User {user_to_delete.username} deleted successfully",
+            "reflections_deleted": len(user_reflections)
         }
         
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create account"
-        )
-
-@router.delete("/delete-user-by-id", status_code=status.HTTP_200_OK)
-async def delete_user_by_id(db: dbDepends, user_parm: User_ID_Schema):
-    """Delete a user and all their reflections"""
-    
-    # Find the user
-    user_to_delete = db.query(User).filter(User.id == user_parm.id).first()
-    if not user_to_delete:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
-    try:
-        # Import Reflection model here to avoid circular import
-        from models import Reflection
-        
-        # Delete all reflections belonging to this user first
-        user_reflections = db.query(Reflection).filter(Reflection.user_id == user_parm.id).all()
-        for reflection in user_reflections:
-            db.delete(reflection)
-        
-        # Now delete the user
-        db.delete(user_to_delete)
-        db.commit()
-        
-        return {"Success": f"User {user_to_delete.username} and all their reflections deleted successfully"}
-        
-    except Exception as e:
-        db.rollback()
-        print(f"Error deleting user: {str(e)}")  # For debugging
+        logger.error(f"Error deleting user: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Failed to delete user: {str(e)}"
+            detail="Failed to delete user"
         )
 
 # Add this new endpoint for real-time password validation
@@ -1030,11 +1141,17 @@ async def validate_password_endpoint(password_data: dict):
         "strength": strength_result
     }
 
-# Password Reset Routes
+
+# ========== Password Reset Routes ==========
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
-async def forgot_password(forgot_data: ForgotPasswordSchema, db: dbDepends):
-    """Step 1: Request password reset - sends reset link to email"""
+async def forgot_password(forgot_data: ForgotPasswordSchema, db: DbSession):
+    """
+    Request password reset - sends reset link to email.
+    
+    Sends a password reset link to the user's email if the account exists.
+    For security, always returns success even if email doesn't exist.
+    """
     
     # Cleanup expired tokens first
     cleanup_expired_reset_tokens(db)
@@ -1127,7 +1244,7 @@ async def forgot_password(forgot_data: ForgotPasswordSchema, db: dbDepends):
         }
 
 @router.get("/reset-password/validate-token")
-async def validate_reset_token(token: str, db: dbDepends):
+async def validate_reset_token(token: str, db: DbSession):
     """Validate if a reset token is valid and not expired"""
     
     if not token:
@@ -1184,7 +1301,7 @@ async def validate_reset_token(token: str, db: dbDepends):
         )
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
-async def reset_password(reset_data: ResetPasswordSchema, db: dbDepends):
+async def reset_password(reset_data: ResetPasswordSchema, db: DbSession):
     """Step 2: Reset password using valid token"""
     
     try:
@@ -1269,11 +1386,18 @@ async def reset_password(reset_data: ResetPasswordSchema, db: dbDepends):
             detail="Failed to reset password"
         )
 
-# Optional: Add endpoint to check reset token status without revealing user info
 @router.get("/reset-password/check-token/{token}")
-async def check_reset_token(token: str, db: dbDepends):
-    """Quick check if token exists and is valid (minimal info exposure)"""
+async def check_reset_token(token: str, db: DbSession):
+    """
+    Quick validation check for reset token.
     
+    Args:
+        token: Reset token to validate.
+        db: Database session.
+        
+    Returns:
+        Simple validity status without exposing user information.
+    """
     token_record = db.query(PasswordResetToken).filter(
         PasswordResetToken.reset_token == token,
         PasswordResetToken.is_used == False,
@@ -1282,10 +1406,22 @@ async def check_reset_token(token: str, db: dbDepends):
     
     return {"valid": bool(token_record)}
 
-# Add this new route for resending password reset emails
+
 @router.post("/forgot-password/resend", status_code=status.HTTP_200_OK)
-async def resend_password_reset(email_data: dict, db: dbDepends):
-    """Resend password reset email for existing token"""
+async def resend_password_reset(email_data: dict, db: DbSession):
+    """
+    Resend password reset email for existing token.
+    
+    Args:
+        email_data: Dictionary containing email address.
+        db: Database session.
+        
+    Returns:
+        Success message if email resent.
+        
+    Raises:
+        HTTPException: If no valid reset request found.
+    """
     email = email_data.get("email")
     
     if not email:

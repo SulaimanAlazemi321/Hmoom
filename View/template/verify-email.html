@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+      <link rel="icon" type="image/png" sizes="32x32" href="/static/images/favicon.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/images/favicon.png">
+    <link rel="shortcut icon" href="/static/images/favicon.png">
+    <link rel="apple-touch-icon" href="/static/images/favicon.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hmoom - Verify Your Email</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 min-h-screen">
+
+<div class="flex items-center justify-center min-h-screen p-4">
+  <div class="w-full max-w-md">
+    
+    <!-- Verification Card -->
+    <div class="bg-gray-800/50 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-700/50 p-8">
+      
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-primary-600 rounded-full mb-4">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+          </svg>
+        </div>
+        <h1 class="text-2xl font-bold text-white mb-2">Verify Your Email</h1>
+        <p class="text-gray-400">We've sent a verification code to:</p>
+        <p id="emailDisplay" class="text-primary-400 font-medium"></p>
+      </div>
+
+      <!-- Verification Form -->
+      <form id="verificationForm" class="space-y-6">
+        
+        <!-- OTP Input Boxes -->
+        <div class="space-y-2">
+          <label class="block text-sm font-medium text-gray-300 text-center">
+            Enter 6-digit verification code
+          </label>
+          <div class="flex justify-center space-x-3">
+            <input type="text" 
+                   class="otp-input w-12 h-14 text-center text-xl font-bold bg-gray-800/50 border-2 border-gray-600 rounded-xl text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200"
+                   maxlength="1" 
+                   pattern="[0-9]" 
+                   inputmode="numeric"
+                   data-index="0">
+            <input type="text" 
+                   class="otp-input w-12 h-14 text-center text-xl font-bold bg-gray-800/50 border-2 border-gray-600 rounded-xl text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200"
+                   maxlength="1" 
+                   pattern="[0-9]" 
+                   inputmode="numeric"
+                   data-index="1">
+            <input type="text" 
+                   class="otp-input w-12 h-14 text-center text-xl font-bold bg-gray-800/50 border-2 border-gray-600 rounded-xl text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200"
+                   maxlength="1" 
+                   pattern="[0-9]" 
+                   inputmode="numeric"
+                   data-index="2">
+            <input type="text" 
+                   class="otp-input w-12 h-14 text-center text-xl font-bold bg-gray-800/50 border-2 border-gray-600 rounded-xl text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200"
+                   maxlength="1" 
+                   pattern="[0-9]" 
+                   inputmode="numeric"
+                   data-index="3">
+            <input type="text" 
+                   class="otp-input w-12 h-14 text-center text-xl font-bold bg-gray-800/50 border-2 border-gray-600 rounded-xl text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200"
+                   maxlength="1" 
+                   pattern="[0-9]" 
+                   inputmode="numeric"
+                   data-index="4">
+            <input type="text" 
+                   class="otp-input w-12 h-14 text-center text-xl font-bold bg-gray-800/50 border-2 border-gray-600 rounded-xl text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200"
+                   maxlength="1" 
+                   pattern="[0-9]" 
+                   inputmode="numeric"
+                   data-index="5">
+          </div>
+        </div>
+
+        <!-- Timer Display -->
+        <div id="timerDisplay" class="text-center text-sm text-gray-400">
+          Code expires in: <span id="countdown" class="text-primary-400 font-medium">10:00</span>
+        </div>
+
+        <!-- Verify Button -->
+        <button type="submit" 
+                id="verifyBtn"
+                class="w-full px-6 py-3 text-lg font-semibold text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span>Verify Email</span>
+        </button>
+
+        <!-- Resend Code -->
+        <div class="text-center">
+          <p class="text-gray-500 text-sm mb-2">Didn't receive the code?</p>
+          <button type="button" 
+                  id="resendBtn"
+                  class="text-primary-400 hover:text-primary-300 text-sm font-medium underline disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline transition-all duration-200"
+                  disabled>
+            Resend Code (30s)
+          </button>
+        </div>
+
+      </form>
+
+      <!-- Footer -->
+      <div class="mt-8 text-center">
+        <a href="/signup" 
+           class="text-sm text-gray-500 hover:text-gray-400 underline transition-colors duration-200">
+          ← Back to Sign Up
+        </a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2">
+  <!-- Toasts will be inserted here -->
+</div>
+
+<script>
+const verificationForm = document.getElementById('verificationForm');
+const verifyBtn = document.getElementById('verifyBtn');
+const resendBtn = document.getElementById('resendBtn');
+const otpInputs = document.querySelectorAll('.otp-input');
+const emailDisplay = document.getElementById('emailDisplay');
+const countdown = document.getElementById('countdown');
+
+// Get email from session storage
+const email = sessionStorage.getItem('verification_email');
+if (!email) {
+  window.location.href = '/signup';
+}
+emailDisplay.textContent = email;
+
+// OTP Input Management
+function setupOTPInputs() {
+  otpInputs.forEach((input, index) => {
+    // Only allow numbers
+    input.addEventListener('input', (e) => {
+      const value = e.target.value;
+      
+      // Remove non-numeric characters
+      e.target.value = value.replace(/[^0-9]/g, '');
+      
+      // Move to next input if digit entered
+      if (e.target.value && index < otpInputs.length - 1) {
+        otpInputs[index + 1].focus();
+      }
+      
+      // Check if all inputs are filled
+      checkOTPComplete();
+    });
+    
+    // Handle backspace
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace') {
+        if (!e.target.value && index > 0) {
+          otpInputs[index - 1].focus();
+          otpInputs[index - 1].value = '';
+        }
+      }
+      
+      // Handle arrow keys
+      if (e.key === 'ArrowLeft' && index > 0) {
+        otpInputs[index - 1].focus();
+      }
+      if (e.key === 'ArrowRight' && index < otpInputs.length - 1) {
+        otpInputs[index + 1].focus();
+      }
+    });
+    
+    // Handle paste
+    input.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const paste = (e.clipboardData || window.clipboardData).getData('text');
+      const digits = paste.replace(/[^0-9]/g, '').slice(0, 6);
+      
+      // Fill inputs with pasted digits
+      digits.split('').forEach((digit, i) => {
+        if (otpInputs[i]) {
+          otpInputs[i].value = digit;
+        }
+      });
+      
+      // Focus last filled input or next empty
+      const lastIndex = Math.min(digits.length, otpInputs.length - 1);
+      otpInputs[lastIndex].focus();
+      
+      checkOTPComplete();
+    });
+    
+    // Handle focus (select all text)
+    input.addEventListener('focus', (e) => {
+      e.target.select();
+    });
+  });
+}
+
+function getOTPValue() {
+  return Array.from(otpInputs).map(input => input.value).join('');
+}
+
+function clearOTP() {
+  otpInputs.forEach(input => {
+    input.value = '';
+    input.classList.remove('border-red-500', 'border-green-500');
+    input.classList.add('border-gray-600');
+  });
+  otpInputs[0].focus();
+}
+
+function setOTPError() {
+  otpInputs.forEach(input => {
+    input.classList.remove('border-gray-600', 'border-green-500');
+    input.classList.add('border-red-500');
+  });
+}
+
+function setOTPSuccess() {
+  otpInputs.forEach(input => {
+    input.classList.remove('border-gray-600', 'border-red-500');
+    input.classList.add('border-green-500');
+  });
+}
+
+function checkOTPComplete() {
+  const otpValue = getOTPValue();
+  if (otpValue.length === 6) {
+    // Auto-submit after a short delay
+    setTimeout(() => {
+      verificationForm.dispatchEvent(new Event('submit'));
+    }, 300);
+  }
+}
+
+// Setup OTP inputs
+setupOTPInputs();
+
+// Focus first input
+otpInputs[0].focus();
+
+// Countdown timer
+let timeLeft = 600; // 10 minutes in seconds
+let resendCooldown = 30; // Allow resend after 30 seconds
+
+const timer = setInterval(() => {
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+  countdown.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  
+  // Enable resend button after 30 seconds
+  if (resendCooldown > 0) {
+    resendCooldown--;
+    resendBtn.textContent = `Resend Code (${resendCooldown}s)`;
+    resendBtn.disabled = true;
+  } else if (resendBtn.disabled && timeLeft > 0) {
+    resendBtn.textContent = 'Resend Code';
+    resendBtn.disabled = false;
+  }
+  
+  if (timeLeft <= 0) {
+    clearInterval(timer);
+    countdown.textContent = 'Expired';
+    countdown.style.color = '#ef4444'; // red color
+    resendBtn.disabled = false;
+    resendBtn.textContent = 'Resend Code';
+    verifyBtn.disabled = true;
+    showToast('Verification code has expired. Please request a new one.', 'error');
+  }
+  
+  timeLeft--;
+}, 1000);
+
+// Form submission
+verificationForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const otpCode = getOTPValue();
+  
+  if (otpCode.length !== 6) {
+    showToast('Please enter all 6 digits', 'error');
+    setOTPError();
+    return;
+  }
+  
+  verifyBtn.disabled = true;
+  verifyBtn.innerHTML = `
+    <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    Verifying...
+  `;
+
+  try {
+    const response = await fetch('/user/signup/verify-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email,
+        otp_code: otpCode
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      setOTPSuccess();
+      showToast('✅ Email verified successfully! Account created.', 'success');
+      
+      // Clear stored email
+      sessionStorage.removeItem('verification_email');
+      
+      // Redirect to login
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2500);
+    } else {
+      setOTPError();
+      showToast(result.detail || 'Verification failed. Please try again.', 'error');
+      setTimeout(() => {
+        clearOTP();
+      }, 1500);
+    }
+  } catch (error) {
+    setOTPError();
+    showToast('Network error. Please check your connection.', 'error');
+    setTimeout(() => {
+      clearOTP();
+    }, 1500);
+  } finally {
+    verifyBtn.disabled = false;
+    verifyBtn.innerHTML = `
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+      <span>Verify Email</span>
+    `;
+  }
+});
+
+// Resend code
+resendBtn.addEventListener('click', async () => {
+  if (resendBtn.disabled) return;
+  
+  resendBtn.disabled = true;
+  resendBtn.textContent = 'Sending...';
+
+  try {
+    const response = await fetch('/user/signup/resend-otp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      showToast('📧 New verification code sent! Check your email.', 'success');
+      
+      // Reset timer and cooldown
+      timeLeft = 600;
+      resendCooldown = 30;
+      verifyBtn.disabled = false;
+      clearOTP();
+      
+      // Update countdown color back to normal
+      countdown.style.color = '#60a5fa';
+      
+    } else {
+      showToast(result.detail || 'Failed to resend code', 'error');
+      resendBtn.disabled = false;
+      resendBtn.textContent = 'Resend Code';
+    }
+  } catch (error) {
+    showToast('Network error. Please try again.', 'error');
+    resendBtn.disabled = false;
+    resendBtn.textContent = 'Resend Code';
+  }
+});
+
+// Enhanced Toast function with longer duration
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  
+  // Different colors and icons for different types
+  let bgColor, icon;
+  switch(type) {
+    case 'success':
+      bgColor = 'bg-green-500';
+      icon = '✅';
+      break;
+    case 'error':
+      bgColor = 'bg-red-500';
+      icon = '❌';
+      break;
+    case 'warning':
+      bgColor = 'bg-yellow-500';
+      icon = '⚠️';
+      break;
+    default:
+      bgColor = 'bg-blue-500';
+      icon = 'ℹ️';
+  }
+  
+  toast.className = `${bgColor} text-white px-6 py-4 rounded-lg shadow-lg transform transition-all duration-500 translate-x-full opacity-0 flex items-center space-x-2 min-w-[300px]`;
+  toast.innerHTML = `
+    <span class="text-xl">${icon}</span>
+    <span class="flex-1">${message}</span>
+    <button onclick="this.parentElement.remove()" class="text-white/80 hover:text-white text-xl leading-none">&times;</button>
+  `;
+  
+  document.getElementById('toast-container').appendChild(toast);
+  
+  // Show toast with animation
+  setTimeout(() => {
+    toast.classList.remove('translate-x-full', 'opacity-0');
+  }, 100);
+  
+  // Auto-hide toast after 4 seconds (much longer than before)
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.classList.add('translate-x-full', 'opacity-0');
+      setTimeout(() => {
+        if (toast.parentElement) {
+          toast.remove();
+        }
+      }, 500);
+    }
+  }, 4000); // Increased from 300ms to 4000ms (4 seconds)
+}
+
+// For testing - uncomment to make resend immediately available
+// resendCooldown = 0;
+</script>
+
+</body>
+</html> 

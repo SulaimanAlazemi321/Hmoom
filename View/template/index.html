@@ -1,0 +1,356 @@
+{% extends "template.html" %}
+{% block content %}
+
+
+<!-- ========== EXPAND MODE INDICATOR ========== -->
+<div id="expandModeIndicator" class="hidden bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2 px-4 text-center text-sm font-medium">
+  <div class="max-w-7xl mx-auto flex items-center justify-center space-x-4">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+    </svg>
+    <span>Expand Mode: You're editing an existing reflection</span>
+    <button id="exitExpandMode" class="ml-4 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-200 text-xs font-medium">
+      Exit Expand Mode
+    </button>
+  </div>
+</div>
+
+<!-- ========== MAIN CONTENT AREA ========== -->
+<main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+   <div class="space-y-8">
+    
+    <!-- Header Section -->
+    <div class="text-center space-y-4 animate-fade-in">
+      {% if question %}
+      <div class="relative">
+        
+        <!-- Buttons pinned top-right -->
+        <div class="absolute top-0 right-0 flex space-x-2">
+          <button id="editTitleBtn" 
+                  class="p-2 text-gray-400 hover:text-primary-400 hover:bg-gray-800 rounded-lg transition-colors duration-200"
+                  title="Write custom title">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+            </svg>
+          </button>
+          <button id="randomQuestionBtn" 
+                  class="p-2 text-gray-400 hover:text-green-400 hover:bg-gray-800 rounded-lg transition-colors duration-200"
+                  title="Get random question">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Question Title with padding to avoid overlap -->
+        <h1 id="title" 
+            class="pr-20 text-3xl sm:text-4xl font-bold text-gray-100 transition-colors duration-200 py-2 px-4 rounded-lg"
+            title="Click to edit title">
+          {{question}}
+        </h1>
+
+        <!-- Title Edit Container -->
+        <div id="current-title-edit" class="hidden mt-4 animate-slide-up"></div>
+        
+        <!-- Custom Title Input Container -->
+        <div id="custom-title-input" class="hidden mt-4 animate-slide-up"></div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+      
+      {% if user %}
+        <p class="text-gray-400 text-lg">Write freely. It's just for you.</p>
+      {% endif %}
+    </div>
+
+    <!-- Main Reflection Card -->
+    <div class="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-2xl p-6 sm:p-8 shadow-2xl animate-slide-up">
+      
+      <!-- Reflection Form -->
+      <form id="reflectionForm" class="space-y-6">
+        
+<!-- Textarea -->
+<div class="space-y-3">
+  <div class="flex justify-between items-center">
+    <label for="reflection" class="block text-sm font-medium text-gray-300">
+      Your reflection
+    </label>
+    <!-- Character count above, right side -->
+    <div class="text-xs text-gray-500" id="charCount">
+      0 characters
+    </div>
+  </div>
+
+  <textarea id="reflection"
+            name="reflection"
+            class="w-full h-[32rem] px-4 py-4 border rounded-xl resize-none transition-all duration-200 text-base leading-relaxed
+            {% if user %}
+              bg-gray-800/50 border-gray-700 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent
+            {% else %}
+              bg-gray-700 border-gray-600 text-gray-400 placeholder-gray-500 opacity-60 cursor-not-allowed focus:ring-0 focus:border-gray-600
+            {% endif %}"
+            dir="auto"
+            {% if not user %}disabled placeholder="Login to write your reflection..."{% else %}autofocus{% endif %}></textarea>
+</div>
+
+
+              <!-- Submit Button -->
+          <div class="flex justify-center">
+            {% if user %}
+              <button type="submit" 
+                      id="submit-reflection"
+                      class="group inline-flex items-center px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200">
+                <svg class="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                </svg>
+                <span id="submit-text">Save Reflection</span>
+              </button>
+            {% else %}
+              <a href="/login"
+                class="group inline-flex items-center px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
+                </svg>
+                Login to Write
+              </a>
+            {% endif %}
+          </div>
+      </form>
+    </div>
+
+    <!-- Inspirational Message -->
+    <div class="text-center">
+      <p class="text-gray-500 text-lg font-light">
+        ✨ Take a deep breath. You're doing great.
+      </p>
+    </div>
+    
+  </div>
+</main>
+
+<!-- ========== PAST REFLECTIONS SIDEBAR ========== -->
+<!-- CHANGE: Show sidebar for ALL logged in users, not just those with reflections -->
+{% if user %}
+<div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden opacity-0 transition-opacity duration-300">
+  <div id="sidebar" class="fixed right-0 top-0 h-full w-96 bg-gray-900 border-l border-gray-800 shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col">
+    
+    <!-- Sidebar Header -->
+    <div class="flex items-center justify-between p-6 border-b border-gray-800">
+      <h2 class="text-xl font-bold text-gray-100">Past memories</h2>
+      <button id="closeSidebarBtn" 
+              class="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors duration-200">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Sidebar Body -->
+    <div class="p-4 flex-1 overflow-y-auto">
+      <div class="space-y-4 pb-4" id="reflectionsList">
+        
+        {% if ref %}
+          <!-- Loop through grouped reflections -->
+          {% for group in ref %}
+          <div class="mb-6" data-group="{{ group.name }}">
+            <!-- Month/Year Header -->
+            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">
+              {{ group.name }}
+            </h3>
+            
+            <!-- Reflections in this group -->
+            <div class="space-y-3">
+              {% for reflection in group.reflections %}
+              <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-4 hover:bg-gray-800 transition-colors duration-200 group" 
+                   id="reflection-item-{{reflection.id}}">
+                
+                <!-- Reflection Summary View -->
+                <div class="reflection-summary" id="summary-{{reflection.id}}">
+                  <div class="text-xs text-gray-500 mb-2">{{ reflection.date }}</div>
+                  <h3 class="text-gray-100 font-medium mb-3 cursor-pointer hover:text-primary-400 transition-colors duration-200" 
+                      onclick="edit_title('{{ reflection.id }}')" 
+                      title="Click to edit title">
+                    {{ reflection.title }}
+                  </h3>
+                  
+                  <!-- Action Buttons -->
+                  <div class="flex space-x-2">
+                    <button onclick="view_reflection('{{ reflection.id }}')"
+                            class="flex-1 px-3 py-2 text-xs font-medium text-primary-400 hover:text-primary-300 hover:bg-primary-900/20 rounded-lg transition-colors duration-200">
+                      View
+                    </button>
+                    <button onclick="delete_reflection('{{ reflection.id }}')"
+                            class="flex-1 px-3 py-2 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors duration-200">
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- Reflection Content View (Hidden by default) -->
+                <div class="reflection-content hidden" id="content-{{reflection.id}}">
+                  <!-- Dynamic content inserted here -->
+                </div>
+                
+                <!-- Title Edit View (Hidden by default) -->
+                <div class="title-edit hidden" id="title-edit-{{reflection.id}}">
+                  <!-- Dynamic title edit form inserted here -->
+                </div>
+                
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+          
+        {% else %}
+          <!-- Empty State for New Users -->
+          <div id="emptyReflectionsState" class="text-center py-12 text-gray-500">
+            <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253z"></path>
+            </svg>
+            <p class="text-lg font-medium mb-2">No memories yet</p>
+            <p class="text-sm">Write your first reflection to get started!</p>
+            <p class="text-xs text-gray-600 mt-4">Your reflections will appear here after saving</p>
+          </div>
+        {% endif %}
+        
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ========== CONFIRMATION MODAL ========== -->
+<div id="confirmDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden opacity-0 transition-opacity duration-300">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl transform scale-95 transition-transform duration-300">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-center mb-4">
+        <div class="w-12 h-12 bg-red-900/20 rounded-full flex items-center justify-center">
+          <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+          </svg>
+        </div>
+      </div>
+      
+      <!-- Modal Body -->
+      <div class="text-center mb-6">
+        <h3 class="text-lg font-semibold text-gray-100 mb-2">Delete Reflection</h3>
+        <p class="text-gray-400 mb-1">Are you sure you want to delete this reflection?</p>
+        <p class="text-sm text-gray-500">This action cannot be undone.</p>
+      </div>
+      
+      <!-- Modal Footer -->
+      <div class="flex space-x-3">
+        <button id="cancelDeleteBtn" 
+                class="flex-1 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors duration-200">
+          Cancel
+        </button>
+        <button id="confirmDeleteBtn" 
+                class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors duration-200">
+          Delete
+        </button>
+      </div>
+      
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2">
+  <!-- Toasts will be inserted here -->
+</div>
+
+<script>
+// ========== SIDEBAR FUNCTIONALITY ==========
+document.addEventListener('DOMContentLoaded', function() {
+  const openSidebarBtn = document.getElementById('openSidebarBtn');
+  const closeSidebarBtn = document.getElementById('closeSidebarBtn');
+  const sidebarOverlay = document.getElementById('sidebarOverlay');
+  const sidebar = document.getElementById('sidebar');
+  
+  if (openSidebarBtn) {
+    openSidebarBtn.addEventListener('click', function() {
+      sidebarOverlay.classList.remove('hidden');
+      setTimeout(() => {
+        sidebarOverlay.classList.remove('opacity-0');
+        sidebar.classList.remove('translate-x-full');
+      }, 10);
+    });
+  }
+  
+  function closeSidebar() {
+    sidebarOverlay.classList.add('opacity-0');
+    sidebar.classList.add('translate-x-full');
+    setTimeout(() => {
+      sidebarOverlay.classList.add('hidden');
+    }, 300);
+  }
+  
+  if (closeSidebarBtn) {
+    closeSidebarBtn.addEventListener('click', closeSidebar);
+  }
+  
+  if (sidebarOverlay) {
+    sidebarOverlay.addEventListener('click', function(e) {
+      if (e.target === sidebarOverlay) {
+        closeSidebar();
+      }
+    });
+  }
+  
+  // Character counter
+  const textarea = document.getElementById('reflection');
+  const charCount = document.getElementById('charCount');
+  
+  if (textarea && charCount) {
+    textarea.addEventListener('input', function() {
+      charCount.textContent = `${textarea.value.length} characters`;
+    });
+  }
+  
+  // Modal functionality
+  const confirmDeleteModal = document.getElementById('confirmDeleteModal');
+  const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+  
+  if (cancelDeleteBtn) {
+    cancelDeleteBtn.addEventListener('click', function() {
+      confirmDeleteModal.classList.add('opacity-0');
+      confirmDeleteModal.querySelector('div > div').classList.add('scale-95');
+      setTimeout(() => {
+        confirmDeleteModal.classList.add('hidden');
+      }, 300);
+    });
+  }
+  
+  // Exit expand mode functionality
+  const exitExpandModeBtn = document.getElementById('exitExpandMode');
+  if (exitExpandModeBtn) {
+    exitExpandModeBtn.addEventListener('click', function() {
+      exitExpandMode();
+    });
+  }
+  
+  // Edit title functionality
+  const editTitleBtn = document.getElementById('editTitleBtn');
+  if (editTitleBtn) {
+    editTitleBtn.addEventListener('click', function() {
+      showCustomTitleInput();
+    });
+  }
+  
+  // Random question functionality
+  const randomQuestionBtn = document.getElementById('randomQuestionBtn');
+  if (randomQuestionBtn) {
+    randomQuestionBtn.addEventListener('click', function() {
+      getRandomQuestion();
+    });
+  }
+});
+</script>
+
+{% endblock %}

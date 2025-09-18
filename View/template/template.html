@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/images/favicon.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/images/favicon.png">
+    <link rel="shortcut icon" href="/static/images/favicon.png">
+    <link rel="apple-touch-icon" href="/static/images/favicon.png">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50: '#f0f9ff',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            },
+            gray: {
+              850: '#1f2937',
+              900: '#111827',
+              950: '#0f172a'
+            }
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.5s ease-in-out',
+            'slide-up': 'slideUp 0.3s ease-out',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- Custom Styles -->
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    @keyframes slideUp {
+      from { transform: translateY(10px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    
+    /* Custom scrollbar */
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #374151;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #6b7280;
+      border-radius: 3px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #9ca3af;
+    }
+  </style>
+
+  <title>Hmoom</title>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+  <!-- ========== NAVIGATION BAR ========== -->
+<nav class="bg-gray-900 border-b border-gray-800 sticky top-0 z-40 backdrop-blur-md bg-opacity-95">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between items-center h-16">
+      <!-- Brand -->
+        <a href="/" class="flex items-center space-x-3">
+        <div class="text-2xl">🌙</div>
+        <h1 class="text-xl font-bold text-gray-100">Reflections</h1>
+      </a>
+
+      
+      <!-- User Controls -->
+      <div class="flex items-center space-x-4">
+        {% if user %}
+          <button id="openSidebarBtn" 
+                  class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors duration-200">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253z"></path>
+            </svg>
+            Past memories
+          </button>
+          
+          <!-- Right corner user info and logout -->
+          <div class="flex items-center space-x-3 ml-auto">
+            <!-- User Avatar and Info -->
+            <div class="flex items-center space-x-3">
+              <!-- Avatar -->
+              <div class="flex-shrink-0">
+                {% if user.avatar_url %}
+                  <img src="/user/avatar/{{ user.id }}" 
+                       alt="User Avatar" 
+                       class="w-8 h-8 rounded-full border-2 border-gray-600 hover:border-primary-500 transition-colors duration-200"
+                       onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                  <!-- Fallback icon (hidden by default) -->
+                  <div class="w-8 h-8 bg-gray-700 rounded-full border-2 border-gray-600 flex items-center justify-center text-gray-400 hidden">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                  </div>
+                {% else %}
+                  <!-- No avatar - show default icon -->
+                  <div class="w-8 h-8 bg-gray-700 rounded-full border-2 border-gray-600 flex items-center justify-center text-gray-400 hover:border-primary-500 transition-colors duration-200">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                  </div>
+                {% endif %}
+              </div>
+              
+              <!-- User Info -->
+              <div class="text-right">
+                <div class="text-xs text-gray-500">Signed in as</div>
+                <div class="text-sm font-medium text-gray-300">
+                  {% if user.full_name %}
+                    {{ user.full_name }}
+                  {% else %}
+                    {{ user.username }}
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            
+            <button onclick="logout()" 
+                    class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors duration-200">
+              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+              </svg>
+              Logout
+            </button>
+          </div>
+        {% else %}
+          <a href="/login" 
+             class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors duration-200">
+            Login
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</nav>
+
+
+  {% block content %}{% endblock %}
+
+  <!-- Your custom JS -->
+  <script src="{{ url_for('static', path='/js/ajax.js') }}"></script>
+
+</body>
+</html>

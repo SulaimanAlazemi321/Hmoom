@@ -6,7 +6,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 # Database configuration
-DATABASE_URL = "sqlite:///./todos.db"
+DATABASE_URL = "sqlite:///./reflection.db"
 
 # Create database engine
 # check_same_thread=False is needed for SQLite to work with FastAPI
